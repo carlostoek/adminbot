@@ -39,13 +39,74 @@ class MenuFactory:
         title = "<b>Panel de Administración</b>\n\nSelecciona una opción:"
         
         options = [
-            ("⚙️ Configurar Sistema", "system_config"),
-            ("📊 Gestionar Canales", "manage_channels"),
-            ("👑 Gestión VIP", "vip_management"),
-            ("📈 Estadísticas", "statistics")
+            ("💎 Canal VIP", "admin_vip"),
+            ("💬 Canal Free", "admin_free"),
+            ("📊 Estadísticas", "admin_stats"),
+            ("⚙️ Configuración", "admin_config")
         ]
         
         return MenuFactory.create_menu(title, options)
+    
+    @staticmethod
+    def admin_vip():
+        """Menú de gestión del canal VIP"""
+        title = "<b>💎 Gestión del Canal VIP</b>\n\nSelecciona una opción:"
+        
+        options = [
+            ("📊 Estadísticas", "vip_stats"),
+            ("🔑 Generar Token", "vip_generate_token"),
+            ("👥 Suscriptores", "vip_manage"),
+            ("📝 Enviar publicación", "send_to_vip_channel"),
+            ("⚙️ Configuración", "vip_config"),
+            ("💋 Config Reacciones", "vip_config_reactions"),
+            ("🔄 Actualizar", "admin_vip")
+        ]
+        
+        return MenuFactory.create_menu(title, options, "admin_panel")
+    
+    @staticmethod
+    def admin_free():
+        """Menú de gestión del canal gratuito"""
+        title = "<b>💬 Gestión del Canal Free</b>\n\nSelecciona una opción:"
+        
+        options = [
+            ("⚙️ Configurar Canal", "configure_free_channel"),
+            ("⏰ Tiempo Espera", "set_wait_time"),
+            ("📝 Enviar publicación", "send_to_free_channel"),
+            ("⚡ Procesar Ahora", "process_pending_now"),
+            ("🧹 Limpiar Antiguas", "cleanup_old_requests"),
+            ("📊 Estadísticas", "free_channel_stats"),
+            ("💋 Config Reacciones", "free_config_reactions"),
+            ("🔄 Actualizar", "admin_free")
+        ]
+        
+        return MenuFactory.create_menu(title, options, "admin_panel")
+    
+    @staticmethod
+    def admin_stats():
+        """Menú de estadísticas generales"""
+        title = "<b>📊 Estadísticas del Sistema</b>\n\nSelecciona una opción:"
+        
+        options = [
+            ("📈 Estadísticas Generales", "general_stats"),
+            ("💰 Reportes de Ingresos", "income_reports"),
+            ("👥 Reportes de Usuarios", "user_reports"),
+            ("🔄 Actualizar", "admin_stats")
+        ]
+        
+        return MenuFactory.create_menu(title, options, "admin_panel")
+    
+    @staticmethod
+    def admin_config():
+        """Menú de estado de configuración"""
+        title = "<b>⚙️ Estado de la Configuración</b>\n\nSelecciona una opción:"
+        
+        options = [
+            ("🔧 Configuración Avanzada", "advanced_config"),
+            ("🔄 Actualizar", "admin_config")
+        ]
+        
+        return MenuFactory.create_menu(title, options, "admin_panel")
     
     @staticmethod
     def system_config():

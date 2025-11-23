@@ -50,17 +50,74 @@ class TelegramBot:
 
     async def handle_vip_token(self, user_id: int, username: str | None, token: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if self.admin_bot.validate_vip_token(token):
+            # Obtener la duración del token antes de registrarlo
+            import sqlite3
+            conn = sqlite3.connect(self.admin_bot.database_path)
+            cursor = conn.cursor()
+            cursor.execute('SELECT duration_days FROM vip_tokens WHERE token = ?', (token,))
+            token_data = cursor.fetchone()
+            duration_days = token_data[0] if token_data else 30
+            conn.close()
+            
+            # Registrar al usuario VIP
             self.admin_bot.register_vip_user(user_id, username or f"ID: {user_id}", token)
             
+            # Obtener el canal VIP
+            vip_channel = self.admin_bot.get_channel('vip')
+            
             if update.message:
+                # Mensaje de confirmación
                 await update.message.reply_text(
-                    "¡Felicidades! Has sido registrado como usuario VIP.\n"
-                    "Tu suscripción es válida por 30 días.\n\n"
-                    "Recibirás un recordatorio un día antes de que expire tu suscripción."
+                    f"¡Felicidades! 🎉 Has sido registrado como usuario VIP.\n"
+                    f"Tu suscripción es válida por {duration_days} días.\n\n"
+                    f"Recibirás un recordatorio un día antes de que expire tu suscripción."
                 )
+                
+                # Generar y enviar invitación al canal VIP si existe
+                if vip_channel:
+                    channel_id, channel_name = vip_channel
+                    
+                    # Crear enlace de invitación usando el formato estándar de Telegram
+                    # t.me/+invite_code o t.me/c/channel_id/invite_code
+                    try:
+                        # Intentar obtener información del bot para crear el enlace
+                        if self.app and self.app.bot:
+                            bot_username = (await self.app.bot.get_me()).username
+                            # Crear un enlace de invitación temporal
+                            invite_link = await self.app.bot.create_chat_invite_link(
+                                chat_id=channel_id,
+                                creates_join_request=False,
+                                name=f"VIP Access for {username or user_id}"
+                            )
+                            
+                            await update.message.reply_text(
+                                f"🔗 Aquí está tu enlace de acceso al canal VIP:\n"
+                                f"{invite_link.invite_link}\n\n"
+                                f"<b>{channel_name}</b>\n"
+                                f"¡Bienvenido/a! 🎊",
+                                parse_mode='HTML'
+                            )
+                        else:
+                            # Fallback: usar formato estándar si no podemos crear enlace personalizado
+                            await update.message.reply_text(
+                                f"🔗 Para acceder al canal VIP:\n"
+                                f"<b>{channel_name}</b>\n\n"
+                                f"Contacta al administrador para obtener acceso directo.",
+                                parse_mode='HTML'
+                            )
+                    except Exception as e:
+                        print(f"Error al crear invitación: {e}")
+                        await update.message.reply_text(
+                            f"⚠️ No se pudo generar la invitación automática.\n"
+                            f"Contacta al administrador para acceder al canal VIP: {channel_name}"
+                        )
+                else:
+                    await update.message.reply_text(
+                        "⚠️ No hay canal VIP configurado. Contacta al administrador."
+                    )
         else:
             if update.message:
-                await update.message.reply_text("Token inválido o ya utilizado.")
+                await update.message.reply_text("❌ Token inválido o ya utilizado.")
 
     async def admin_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -73,6 +130,58 @@ class TelegramBot:
             return
         
         title, reply_markup = MenuFactory.admin_panel()
+        await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def admin_vip(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+        
+        if not update.effective_user or update.effective_user.id != self.admin_bot.admin_id:
+            await query.edit_message_text("No tienes permisos de administrador.")
+            return
+        
+        title, reply_markup = MenuFactory.admin_vip()
+        await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def admin_free(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+        
+        if not update.effective_user or update.effective_user.id != self.admin_bot.admin_id:
+            await query.edit_message_text("No tienes permisos de administrador.")
+            return
+        
+        title, reply_markup = MenuFactory.admin_free()
+        await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def admin_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+        
+        if not update.effective_user or update.effective_user.id != self.admin_bot.admin_id:
+            await query.edit_message_text("No tienes permisos de administrador.")
+            return
+        
+        title, reply_markup = MenuFactory.admin_stats()
+        await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def admin_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+        
+        if not update.effective_user or update.effective_user.id != self.admin_bot.admin_id:
+            await query.edit_message_text("No tienes permisos de administrador.")
+            return
+        
+        title, reply_markup = MenuFactory.admin_config()
         await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
 
     async def config_delay(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -828,6 +937,10 @@ class TelegramBot:
         
         self.app.add_handler(CommandHandler("start", self.start))
         self.app.add_handler(CallbackQueryHandler(self.admin_panel, pattern="^admin_panel$"))
+        self.app.add_handler(CallbackQueryHandler(self.admin_vip, pattern="^admin_vip$"))
+        self.app.add_handler(CallbackQueryHandler(self.admin_free, pattern="^admin_free$"))
+        self.app.add_handler(CallbackQueryHandler(self.admin_stats, pattern="^admin_stats$"))
+        self.app.add_handler(CallbackQueryHandler(self.admin_config, pattern="^admin_config$"))
         self.app.add_handler(CallbackQueryHandler(self.config_delay, pattern="^config_delay$"))
         self.app.add_handler(CallbackQueryHandler(self.set_delay, pattern="^set_delay_"))
         self.app.add_handler(CallbackQueryHandler(self.generate_vip_token, pattern="^generate_vip_token$"))
