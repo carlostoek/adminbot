@@ -113,20 +113,7 @@ class AdminBot:
         conn.close()
         return token
 
-    def register_vip_token(self, token, duration_days):
-        """Registra un token VIP con una duración específica"""
-        conn = sqlite3.connect(self.database_path)
-        cursor = conn.cursor()
-        
-        # Actualizar el token para incluir la duración
-        cursor.execute('''
-            UPDATE vip_tokens 
-            SET duration_days = ? 
-            WHERE token = ?
-        ''', (duration_days, token))
-        
-        conn.commit()
-        conn.close()
+
 
     def validate_vip_token(self, token):
         conn = sqlite3.connect(self.database_path)
@@ -143,11 +130,7 @@ class AdminBot:
         # Obtener la duración del token
         cursor.execute('SELECT duration_days FROM vip_tokens WHERE token = ?', (token,))
         token_data = cursor.fetchone()
-        
-        if token_data:
-            duration_days = token_data[0] or 30  # Usar 30 días como valor por defecto
-        else:
-            duration_days = 30
+        duration_days = token_data[0] or 30  # Usar 30 días como valor por defecto
         
         subscription_end = datetime.now() + timedelta(days=duration_days)
         cursor.execute('''
@@ -337,8 +320,8 @@ class AdminBot:
             WHERE id = ?
         ''', (update_name, update_days, update_cost, rate_id))
         conn.commit()
-        return True
         conn.close()
+        return True
 
     def delete_vip_rate(self, rate_id):
         conn = sqlite3.connect(self.database_path)

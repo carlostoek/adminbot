@@ -177,11 +177,8 @@ class TelegramBot:
             await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
             return
         
-        # Generar token y asociarlo a la duración de la tarifa
-        token = self.admin_bot.generate_vip_token()
-        
-        # Registrar el token con la duración de la tarifa
-        self.admin_bot.register_vip_token(token, days)
+        # Generar token con la duración de la tarifa
+        token = self.admin_bot.generate_vip_token(duration_days=days)
         
         # Crear enlace de invitación
         if self.app and self.app.bot:
@@ -819,7 +816,7 @@ class TelegramBot:
             title, reply_markup = MenuFactory.create_simple_message(
                 "❌ Error",
                 "Por favor ingresa un precio válido (ejemplo: 10.50)",
-                f"edit_rate_{context.user_data.get('editing_rate_id', 0)}"
+                f"edit_rate_{context.user_data.get('editing_rate_id', 0)}" if context.user_data and 'editing_rate_id' in context.user_data else "view_rates"
             )
             if update.message:
                 await update.message.reply_text(title, reply_markup=reply_markup, parse_mode='HTML')
