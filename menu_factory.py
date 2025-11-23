@@ -93,12 +93,62 @@ class MenuFactory:
         title = "<b>Gestión VIP</b>\n\nSelecciona una opción:"
         
         options = [
+            ("💰 Gestionar Tarifas", "manage_rates"),
             ("🎫 Generar Token VIP", "generate_vip_token"),
             ("👥 Ver Usuarios VIP", "view_vip_users"),
             ("📊 Estadísticas VIP", "vip_statistics")
         ]
         
         return MenuFactory.create_menu(title, options, "admin_panel")
+    
+    @staticmethod
+    def manage_rates():
+        """Menú de gestión de tarifas VIP"""
+        title = "<b>Gestión de Tarifas VIP</b>\n\nSelecciona una opción:"
+        
+        options = [
+            ("➕ Crear Nueva Tarifa", "select_rate_duration"),
+            ("📋 Ver Tarifas Configuradas", "view_rates")
+        ]
+        
+        return MenuFactory.create_menu(title, options, "vip_management")
+    
+    @staticmethod
+    def select_rate_duration():
+        """Menú para seleccionar duración de tarifa"""
+        title = "<b>Crear Tarifa - Paso 1</b>\n\nSelecciona la duración de la suscripción:"
+        
+        options = [
+            ("1 día", "rate_duration_1"),
+            ("1 semana (7 días)", "rate_duration_7"),
+            ("2 semanas (14 días)", "rate_duration_14"),
+            ("1 mes (30 días)", "rate_duration_30")
+        ]
+        
+        return MenuFactory.create_menu(title, options, "manage_rates")
+    
+    @staticmethod
+    def view_rates_list(rates=None):
+        """Menú para listar tarifas con botones inline"""
+        if not rates:
+            title = "<b>Tarifas VIP Configuradas</b>\n\nNo hay tarifas configuradas.\n\nSelecciona una opción:"
+            options = [
+                ("➕ Crear Nueva Tarifa", "select_rate_duration")
+            ]
+        else:
+            title = "<b>Tarifas VIP Configuradas</b>\n\nSelecciona una tarifa para gestionarla:"
+            options = []
+            
+            # Agregar botones para cada tarifa
+            for rate_id, name, days, cost, is_active in rates:
+                status = "🟢" if is_active else "🔴"
+                button_text = f"{status} {name} - {days}d - ${cost:.2f}"
+                options.append((button_text, f"edit_rate_{rate_id}"))
+            
+            # Agregar botón para crear nueva tarifa
+            options.append(("➕ Crear Nueva Tarifa", "select_rate_duration"))
+        
+        return MenuFactory.create_menu(title, options, "manage_rates")
     
     @staticmethod
     def statistics():
