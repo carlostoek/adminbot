@@ -342,14 +342,16 @@ class AdminBot:
         conn.close()
 
     # Funciones para envío de mensajes a canales
-    async def send_message_to_channel(self, channel_type, message_text, file_path=None, disable_downloads=False, context=None):
+    async def send_message_to_channel(self, channel_type, message_text, file_path=None, file_id=None, file_type=None, disable_downloads=False, context=None):
         """
         Envía un mensaje al canal especificado.
         
         Args:
             channel_type (str): 'vip' o 'free'
             message_text (str): Texto del mensaje
-            file_path (str, optional): Ruta al archivo adjunto
+            file_path (str, optional): Ruta al archivo adjunto (legacy)
+            file_id (str, optional): ID del archivo en Telegram
+            file_type (str, optional): Tipo de archivo ('photo', 'video', 'document')
             disable_downloads (bool): Si deshabilitar descargas
             context: Contexto de Telegram para enviar el mensaje
         
@@ -366,47 +368,31 @@ class AdminBot:
         channel_id, channel_name = channel
         
         try:
-            if file_path:
-                # Enviar mensaje con archivo adjunto
-                with open(file_path, 'rb') as file:
-                    if file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.gif')):
-                        # Es una imagen
-                        await context.bot.send_photo(
-                            chat_id=channel_id,
-                            photo=file,
-                            caption=message_text,
-                            parse_mode='HTML'
-                        )
-                    elif file_path.lower().endswith(('.mp4', '.avi', '.mov')):
-                        # Es un video
-                        await context.bot.send_video(
-                            chat_id=channel_id,
-                            video=file,
-                            caption=message_text,
-                            parse_mode='HTML'
-                        )
-                    elif file_path.lower().endswith(('.pdf', '.doc', '.docx')):
-                        # Es un documento
-                        await context.bot.send_document(
-                            chat_id=channel_id,
-                            document=file,
-                            caption=message_text,
-                            parse_mode='HTML'
-                        )
-                    else:
-                        # Archivo genérico
-                        await context.bot.send_document(
-                            chat_id=channel_id,
-                            document=file,
-                            caption=message_text,
-                            parse_mode='HTML'
-                        )
+            if file_id and file_type:
+                # Enviar mensaje con archivo adjunto usando file_id
+                kwargs = {
+                    "chat_id": channel_id,
+                    "caption": message_text,
+                    "parse_mode": 'HTML',
+                    "protect_content": disable_downloads
+                }
+                
+                if file_type == 'photo':
+                    await context.bot.send_photo(photo=file_id, **kwargs)
+                elif file_type == 'video':
+                    await context.bot.send_video(video=file_id, **kwargs)
+                elif file_type == 'document':
+                    await context.bot.send_document(document=file_id, **kwargs)
+                else:
+                    # Fallback para tipos desconocidos
+                    await context.bot.send_document(document=file_id, **kwargs)
             else:
                 # Enviar solo texto
                 await context.bot.send_message(
                     chat_id=channel_id,
                     text=message_text,
-                    parse_mode='HTML'
+                    parse_mode='HTML',
+                    protect_content=disable_downloads
                 )
             
             return True
@@ -415,14 +401,16 @@ class AdminBot:
             print(f"Error enviando mensaje al canal {channel_type}: {e}")
             return False
 
-    def save_message_draft(self, channel_type, message_text, file_path=None, disable_downloads=False):
+    def save_message_draft(self, channel_type, message_text, file_path=None, file_id=None, file_type=None, disable_downloads=False):
         """
         Guarda un borrador de mensaje en la base de datos.
         
         Args:
             channel_type (str): 'vip' o 'free'
             message_text (str): Texto del mensaje
-            file_path (str, optional): Ruta al archivo adjunto
+            file_path (str, optional): Ruta al archivo adjunto (legacy)
+            file_id (str, optional): ID del archivo en Telegram
+            file_type (str, optional): Tipo de archivo ('photo', 'video', 'document')
             disable_downloads (bool): Si deshabilitar descargas
         
         Returns:
@@ -437,15 +425,17 @@ class AdminBot:
                 channel_type TEXT NOT NULL,
                 message_text TEXT NOT NULL,
                 file_path TEXT,
+                file_id TEXT,
+                file_type TEXT,
                 disable_downloads BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
         cursor.execute('''
-            INSERT INTO message_drafts (channel_type, message_text, file_path, disable_downloads)
-            VALUES (?, ?, ?, ?)
-        ''', (channel_type, message_text, file_path, disable_downloads))
+            INSERT INTO message_drafts (channel_type, message_text, file_path, file_id, file_type, disable_downloads)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (channel_type, message_text, file_path, file_id, file_type, disable_downloads))
         
         draft_id = cursor.lastrowid
         conn.commit()
@@ -467,7 +457,7 @@ class AdminBot:
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT id, channel_type, message_text, file_path, disable_downloads, created_at
+            SELECT id, channel_type, message_text, file_path, file_id, file_type, disable_downloads, created_at
             FROM message_drafts
             WHERE id = ?
         ''', (draft_id,))

@@ -1090,25 +1090,24 @@ class TelegramBot:
         
         # Guardar información del archivo
         file_id = None
-        file_path = None
+        file_type = None
         
         if update.message.photo:
             # Es una foto
             file_id = update.message.photo[-1].file_id
-            file_path = f"photo_{file_id}.jpg"
+            file_type = 'photo'
         elif update.message.video:
             # Es un video
             file_id = update.message.video.file_id
-            file_path = f"video_{file_id}.mp4"
+            file_type = 'video'
         elif update.message.document:
             # Es un documento
             file_id = update.message.document.file_id
-            file_name = update.message.document.file_name or f"document_{file_id}"
-            file_path = f"document_{file_name}"
+            file_type = 'document'
         
         if file_id:
             context.user_data['file_id'] = file_id
-            context.user_data['file_path'] = file_path
+            context.user_data['file_type'] = file_type
             context.user_data['awaiting_file'] = False
             context.user_data['awaiting_download_restriction'] = True
             
@@ -1152,7 +1151,8 @@ class TelegramBot:
         
         channel_type = context.user_data['posting_channel']
         message_text = context.user_data['message_text']
-        file_path = context.user_data.get('file_path')
+        file_id = context.user_data.get('file_id')
+        file_type = context.user_data.get('file_type')
         
         # Configurar restricciones de descarga
         disable_downloads = query.data == 'disable_downloads'
@@ -1161,7 +1161,8 @@ class TelegramBot:
         draft_id = self.admin_bot.save_message_draft(
             channel_type=channel_type,
             message_text=message_text,
-            file_path=file_path,
+            file_id=file_id,
+            file_type=file_type,
             disable_downloads=disable_downloads
         )
         
@@ -1173,8 +1174,8 @@ class TelegramBot:
         preview_text = f"<b>📝 Vista Previa - Canal {channel_type.upper()}</b>\n\n"
         preview_text += f"<b>Texto del mensaje:</b>\n{message_text}\n\n"
         
-        if file_path:
-            preview_text += f"<b>Archivo adjunto:</b> Sí ({file_path})\n"
+        if file_id:
+            preview_text += f"<b>Archivo adjunto:</b> Sí ({file_type})\n"
         else:
             preview_text += "<b>Archivo adjunto:</b> No\n"
         
@@ -1216,13 +1217,14 @@ class TelegramBot:
                 await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
                 return
             
-            draft_id, channel_type, message_text, file_path, disable_downloads, created_at = draft
+            draft_id, channel_type, message_text, file_path, file_id, file_type, disable_downloads, created_at = draft
             
             # Enviar mensaje al canal
             success = await self.admin_bot.send_message_to_channel(
                 channel_type=channel_type,
                 message_text=message_text,
-                file_path=file_path,
+                file_id=file_id,
+                file_type=file_type,
                 disable_downloads=disable_downloads,
                 context=context
             )
@@ -1232,7 +1234,7 @@ class TelegramBot:
                 self.admin_bot.delete_message_draft(draft_id)
                 
                 # Limpiar datos temporales
-                for key in ['posting_channel', 'message_text', 'file_path', 'draft_id', 'awaiting_confirmation']:
+                for key in ['posting_channel', 'message_text', 'file_id', 'file_type', 'draft_id', 'awaiting_confirmation']:
                     context.user_data.pop(key, None)
                 
                 title, reply_markup = MenuFactory.create_simple_message(
