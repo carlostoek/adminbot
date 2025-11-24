@@ -341,6 +341,146 @@ class AdminBot:
         conn.commit()
         conn.close()
 
+    # Funciones para envío de mensajes a canales
+    async def send_message_to_channel(self, channel_type, message_text, file_path=None, file_id=None, file_type=None, disable_downloads=False, context=None):
+        """
+        Envía un mensaje al canal especificado.
+        
+        Args:
+            channel_type (str): 'vip' o 'free'
+            message_text (str): Texto del mensaje
+            file_path (str, optional): Ruta al archivo adjunto (legacy)
+            file_id (str, optional): ID del archivo en Telegram
+            file_type (str, optional): Tipo de archivo ('photo', 'video', 'document')
+            disable_downloads (bool): Si deshabilitar descargas
+            context: Contexto de Telegram para enviar el mensaje
+        
+        Returns:
+            bool: True si se envió correctamente, False en caso de error
+        """
+        if not context or not context.bot:
+            return False
+        
+        channel = self.get_channel(channel_type)
+        if not channel:
+            return False
+        
+        channel_id, channel_name = channel
+        
+        try:
+            if file_id and file_type:
+                # Enviar mensaje con archivo adjunto usando file_id
+                kwargs = {
+                    "chat_id": channel_id,
+                    "caption": message_text,
+                    "parse_mode": 'HTML',
+                    "protect_content": disable_downloads
+                }
+                
+                if file_type == 'photo':
+                    await context.bot.send_photo(photo=file_id, **kwargs)
+                elif file_type == 'video':
+                    await context.bot.send_video(video=file_id, **kwargs)
+                elif file_type == 'document':
+                    await context.bot.send_document(document=file_id, **kwargs)
+                else:
+                    # Fallback para tipos desconocidos
+                    await context.bot.send_document(document=file_id, **kwargs)
+            else:
+                # Enviar solo texto
+                await context.bot.send_message(
+                    chat_id=channel_id,
+                    text=message_text,
+                    parse_mode='HTML',
+                    protect_content=disable_downloads
+                )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error enviando mensaje al canal {channel_type}: {e}")
+            return False
+
+    def save_message_draft(self, channel_type, message_text, file_path=None, file_id=None, file_type=None, disable_downloads=False):
+        """
+        Guarda un borrador de mensaje en la base de datos.
+        
+        Args:
+            channel_type (str): 'vip' o 'free'
+            message_text (str): Texto del mensaje
+            file_path (str, optional): Ruta al archivo adjunto (legacy)
+            file_id (str, optional): ID del archivo en Telegram
+            file_type (str, optional): Tipo de archivo ('photo', 'video', 'document')
+            disable_downloads (bool): Si deshabilitar descargas
+        
+        Returns:
+            int: ID del borrador guardado
+        """
+        conn = sqlite3.connect(self.database_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS message_drafts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel_type TEXT NOT NULL,
+                message_text TEXT NOT NULL,
+                file_path TEXT,
+                file_id TEXT,
+                file_type TEXT,
+                disable_downloads BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        cursor.execute('''
+            INSERT INTO message_drafts (channel_type, message_text, file_path, file_id, file_type, disable_downloads)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (channel_type, message_text, file_path, file_id, file_type, disable_downloads))
+        
+        draft_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return draft_id
+
+    def get_message_draft(self, draft_id):
+        """
+        Obtiene un borrador de mensaje por ID.
+        
+        Args:
+            draft_id (int): ID del borrador
+        
+        Returns:
+            tuple: Datos del borrador o None si no existe
+        """
+        conn = sqlite3.connect(self.database_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, channel_type, message_text, file_path, file_id, file_type, disable_downloads, created_at
+            FROM message_drafts
+            WHERE id = ?
+        ''', (draft_id,))
+        
+        draft = cursor.fetchone()
+        conn.close()
+        
+        return draft
+
+    def delete_message_draft(self, draft_id):
+        """
+        Elimina un borrador de mensaje.
+        
+        Args:
+            draft_id (int): ID del borrador
+        """
+        conn = sqlite3.connect(self.database_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM message_drafts WHERE id = ?', (draft_id,))
+        conn.commit()
+        conn.close()
+
 if __name__ == "__main__":
     bot = AdminBot()
     print("Database initialized successfully!")
