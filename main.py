@@ -47,6 +47,9 @@ class TelegramBot:
             await self.handle_rate_name_edit(update, context)
         elif context.user_data.get('awaiting_rate_cost_edit'):
             await self.handle_rate_cost_edit(update, context)
+        # Verificar estado de envío de mensaje
+        elif context.user_data.get('awaiting_message_text'):
+            await self.handle_message_text_input(update, context)
 
     async def handle_vip_token(self, user_id: int, username: str | None, token: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if self.admin_bot.validate_vip_token(token):
@@ -930,6 +933,338 @@ class TelegramBot:
             if update.message:
                 await update.message.reply_text(title, reply_markup=reply_markup, parse_mode='HTML')
 
+    # Funciones para envío de mensajes a canales
+    async def send_to_vip_channel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Inicia el flujo de envío de mensaje al canal VIP"""
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+        
+        if context.user_data is not None:
+            context.user_data['posting_channel'] = 'vip'
+            context.user_data['awaiting_message_text'] = True
+        
+        title, reply_markup = MenuFactory.create_simple_message(
+            "📝 Enviar Mensaje al Canal VIP",
+            "<b>Paso 1: Escribe el mensaje</b>\n\n"
+            "Envía el texto del mensaje que quieres publicar en el canal VIP.\n"
+            "Puedes usar formato HTML para dar estilo al texto.\n\n"
+            "<i>Ejemplo de formato:</i>\n"
+            "• <b>Negrita</b>: &lt;b&gt;texto&lt;/b&gt;\n"
+            "• <i>Cursiva</i>: &lt;i&gt;texto&lt;/i&gt;\n"
+            "• <code>Monoespaciado</code>: &lt;code&gt;texto&lt;/code&gt;\n\n"
+            "<i>Envía ahora el texto del mensaje...</i>",
+            "admin_vip"
+        )
+        
+        await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def send_to_free_channel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Inicia el flujo de envío de mensaje al canal gratuito"""
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+        
+        if context.user_data is not None:
+            context.user_data['posting_channel'] = 'free'
+            context.user_data['awaiting_message_text'] = True
+        
+        title, reply_markup = MenuFactory.create_simple_message(
+            "📝 Enviar Mensaje al Canal Free",
+            "<b>Paso 1: Escribe el mensaje</b>\n\n"
+            "Envía el texto del mensaje que quieres publicar en el canal gratuito.\n"
+            "Puedes usar formato HTML para dar estilo al texto.\n\n"
+            "<i>Ejemplo de formato:</i>\n"
+            "• <b>Negrita</b>: &lt;b&gt;texto&lt;/b&gt;\n"
+            "• <i>Cursiva</i>: &lt;i&gt;texto&lt;/i&gt;\n"
+            "• <code>Monoespaciado</code>: &lt;code&gt;texto&lt;/code&gt;\n\n"
+            "<i>Envía ahora el texto del mensaje...</i>",
+            "admin_free"
+        )
+        
+        await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def handle_message_text_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Maneja la entrada del texto del mensaje"""
+        if context.user_data is None or not context.user_data.get('awaiting_message_text'):
+            return
+        
+        if not update.message or not update.message.text:
+            return
+        
+        message_text = update.message.text.strip()
+        channel_type = context.user_data['posting_channel']
+        
+        # Guardar el texto del mensaje
+        context.user_data['message_text'] = message_text
+        context.user_data['awaiting_message_text'] = False
+        context.user_data['awaiting_file_choice'] = True
+        
+        title, reply_markup = MenuFactory.create_simple_message(
+            f"📝 Enviar Mensaje al Canal {channel_type.upper()}",
+            f"<b>Paso 2: Adjuntar archivo</b>\n\n"
+            f"<b>Texto del mensaje:</b>\n{message_text[:200]}{'...' if len(message_text) > 200 else ''}\n\n"
+            "¿Deseas adjuntar un archivo al mensaje?\n"
+            "• <b>Sí</b>: Adjuntar imagen, video o documento\n"
+            "• <b>No</b>: Continuar sin archivo adjunto\n\n"
+            "<i>Selecciona una opción:</i>",
+            f"send_to_{channel_type}_channel"
+        )
+        
+        # Crear botones para adjuntar archivo
+        keyboard = [
+            [InlineKeyboardButton("📎 Adjuntar Archivo", callback_data="attach_file")],
+            [InlineKeyboardButton("➡️ Continuar sin Archivo", callback_data="no_file")],
+            [InlineKeyboardButton("← Volver", callback_data=f"send_to_{channel_type}_channel")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(title, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def handle_file_choice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Maneja la elección de adjuntar archivo"""
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+        
+        if context.user_data is None or not context.user_data.get('awaiting_file_choice'):
+            return
+        
+        channel_type = context.user_data['posting_channel']
+        
+        if query.data == 'attach_file':
+            context.user_data['awaiting_file_choice'] = False
+            context.user_data['awaiting_file'] = True
+            
+            title, reply_markup = MenuFactory.create_simple_message(
+                f"📝 Enviar Mensaje al Canal {channel_type.upper()}",
+                "<b>Paso 2a: Adjuntar archivo</b>\n\n"
+                "Envía el archivo que deseas adjuntar al mensaje.\n"
+                "Tipos de archivo soportados:\n"
+                "• Imágenes (JPG, PNG, GIF)\n"
+                "• Videos (MP4, AVI, MOV)\n"
+                "• Documentos (PDF, DOC, DOCX)\n\n"
+                "<i>Envía ahora el archivo...</i>",
+                f"send_to_{channel_type}_channel"
+            )
+            
+            await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
+            
+        elif query.data == 'no_file':
+            context.user_data['awaiting_file_choice'] = False
+            context.user_data['awaiting_download_restriction'] = True
+            
+            title, reply_markup = MenuFactory.create_simple_message(
+                f"📝 Enviar Mensaje al Canal {channel_type.upper()}",
+                "<b>Paso 3: Restricciones de descarga</b>\n\n"
+                "¿Deseas deshabilitar las descargas para este mensaje?\n\n"
+                "<b>Deshabilitar descargas:</b>\n"
+                "• Los usuarios no podrán descargar archivos adjuntos\n"
+                "• Solo podrán ver el contenido en Telegram\n\n"
+                "<i>Selecciona una opción:</i>",
+                f"send_to_{channel_type}_channel"
+            )
+            
+            # Crear botones para restricciones de descarga
+            keyboard = [
+                [InlineKeyboardButton("🔒 Deshabilitar Descargas", callback_data="disable_downloads")],
+                [InlineKeyboardButton("🔓 Permitir Descargas", callback_data="allow_downloads")],
+                [InlineKeyboardButton("← Volver", callback_data=f"send_to_{channel_type}_channel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def handle_file_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Maneja la entrada de archivo adjunto"""
+        if context.user_data is None or not context.user_data.get('awaiting_file'):
+            return
+        
+        if not update.message:
+            return
+        
+        channel_type = context.user_data['posting_channel']
+        
+        # Guardar información del archivo
+        file_id = None
+        file_path = None
+        
+        if update.message.photo:
+            # Es una foto
+            file_id = update.message.photo[-1].file_id
+            file_path = f"photo_{file_id}.jpg"
+        elif update.message.video:
+            # Es un video
+            file_id = update.message.video.file_id
+            file_path = f"video_{file_id}.mp4"
+        elif update.message.document:
+            # Es un documento
+            file_id = update.message.document.file_id
+            file_name = update.message.document.file_name or f"document_{file_id}"
+            file_path = f"document_{file_name}"
+        
+        if file_id:
+            context.user_data['file_id'] = file_id
+            context.user_data['file_path'] = file_path
+            context.user_data['awaiting_file'] = False
+            context.user_data['awaiting_download_restriction'] = True
+            
+            title, reply_markup = MenuFactory.create_simple_message(
+                f"📝 Enviar Mensaje al Canal {channel_type.upper()}",
+                "<b>Paso 3: Restricciones de descarga</b>\n\n"
+                "¿Deseas deshabilitar las descargas para este mensaje?\n\n"
+                "<b>Deshabilitar descargas:</b>\n"
+                "• Los usuarios no podrán descargar archivos adjuntos\n"
+                "• Solo podrán ver el contenido en Telegram\n\n"
+                "<i>Selecciona una opción:</i>",
+                f"send_to_{channel_type}_channel"
+            )
+            
+            # Crear botones para restricciones de descarga
+            keyboard = [
+                [InlineKeyboardButton("🔒 Deshabilitar Descargas", callback_data="disable_downloads")],
+                [InlineKeyboardButton("🔓 Permitir Descargas", callback_data="allow_downloads")],
+                [InlineKeyboardButton("← Volver", callback_data=f"send_to_{channel_type}_channel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(title, reply_markup=reply_markup, parse_mode='HTML')
+        else:
+            title, reply_markup = MenuFactory.create_simple_message(
+                "❌ Error",
+                "No se pudo procesar el archivo. Asegúrate de enviar una imagen, video o documento válido.",
+                f"send_to_{channel_type}_channel"
+            )
+            await update.message.reply_text(title, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def handle_download_restriction(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Maneja la elección de restricciones de descarga"""
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+        
+        if context.user_data is None or not context.user_data.get('awaiting_download_restriction'):
+            return
+        
+        channel_type = context.user_data['posting_channel']
+        message_text = context.user_data['message_text']
+        file_path = context.user_data.get('file_path')
+        
+        # Configurar restricciones de descarga
+        disable_downloads = query.data == 'disable_downloads'
+        
+        # Guardar borrador del mensaje
+        draft_id = self.admin_bot.save_message_draft(
+            channel_type=channel_type,
+            message_text=message_text,
+            file_path=file_path,
+            disable_downloads=disable_downloads
+        )
+        
+        context.user_data['draft_id'] = draft_id
+        context.user_data['awaiting_download_restriction'] = False
+        context.user_data['awaiting_confirmation'] = True
+        
+        # Crear vista previa del mensaje
+        preview_text = f"<b>📝 Vista Previa - Canal {channel_type.upper()}</b>\n\n"
+        preview_text += f"<b>Texto del mensaje:</b>\n{message_text}\n\n"
+        
+        if file_path:
+            preview_text += f"<b>Archivo adjunto:</b> Sí ({file_path})\n"
+        else:
+            preview_text += "<b>Archivo adjunto:</b> No\n"
+        
+        preview_text += f"<b>Descargas:</b> {'🔒 Deshabilitadas' if disable_downloads else '🔓 Permitidas'}\n\n"
+        preview_text += "<i>¿Deseas enviar este mensaje al canal?</i>"
+        
+        # Crear botones de confirmación
+        keyboard = [
+            [InlineKeyboardButton("✅ Enviar Mensaje", callback_data="confirm_send_message")],
+            [InlineKeyboardButton("✏️ Editar Mensaje", callback_data="edit_message")],
+            [InlineKeyboardButton("❌ Cancelar", callback_data=f"admin_{channel_type}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(preview_text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def handle_message_confirmation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Maneja la confirmación y envío del mensaje"""
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+        
+        if context.user_data is None or not context.user_data.get('awaiting_confirmation'):
+            return
+        
+        channel_type = context.user_data['posting_channel']
+        draft_id = context.user_data['draft_id']
+        
+        if query.data == 'confirm_send_message':
+            # Obtener datos del borrador
+            draft = self.admin_bot.get_message_draft(draft_id)
+            if not draft:
+                title, reply_markup = MenuFactory.create_simple_message(
+                    "❌ Error",
+                    "No se pudo encontrar el borrador del mensaje.",
+                    f"admin_{channel_type}"
+                )
+                await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
+                return
+            
+            draft_id, channel_type, message_text, file_path, disable_downloads, created_at = draft
+            
+            # Enviar mensaje al canal
+            success = await self.admin_bot.send_message_to_channel(
+                channel_type=channel_type,
+                message_text=message_text,
+                file_path=file_path,
+                disable_downloads=disable_downloads,
+                context=context
+            )
+            
+            if success:
+                # Eliminar borrador
+                self.admin_bot.delete_message_draft(draft_id)
+                
+                # Limpiar datos temporales
+                for key in ['posting_channel', 'message_text', 'file_path', 'draft_id', 'awaiting_confirmation']:
+                    context.user_data.pop(key, None)
+                
+                title, reply_markup = MenuFactory.create_simple_message(
+                    "✅ Mensaje Enviado",
+                    f"El mensaje ha sido enviado exitosamente al canal {channel_type.upper()}.",
+                    f"admin_{channel_type}"
+                )
+            else:
+                title, reply_markup = MenuFactory.create_simple_message(
+                    "❌ Error",
+                    "No se pudo enviar el mensaje al canal. Verifica que el bot tenga permisos de administrador en el canal.",
+                    f"admin_{channel_type}"
+                )
+            
+            await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
+            
+        elif query.data == 'edit_message':
+            # Volver al inicio del flujo
+            context.user_data['awaiting_confirmation'] = False
+            context.user_data['awaiting_message_text'] = True
+            
+            title, reply_markup = MenuFactory.create_simple_message(
+                f"📝 Enviar Mensaje al Canal {channel_type.upper()}",
+                "<b>Paso 1: Escribe el mensaje</b>\n\n"
+                "Envía el texto del mensaje que quieres publicar en el canal.\n"
+                "Puedes usar formato HTML para dar estilo al texto.\n\n"
+                "<i>Envía ahora el texto del mensaje...</i>",
+                f"admin_{channel_type}"
+            )
+            
+            await query.edit_message_text(title, reply_markup=reply_markup, parse_mode='HTML')
+
     def run(self):
         if not self.token:
             raise ValueError("Bot token is not available")
@@ -969,8 +1304,16 @@ class TelegramBot:
         self.app.add_handler(CallbackQueryHandler(self.change_rate_duration, pattern="^change_rate_duration_"))
         self.app.add_handler(CallbackQueryHandler(self.change_rate_cost, pattern="^change_rate_cost_"))
         
+        # Handlers para envío de mensajes a canales
+        self.app.add_handler(CallbackQueryHandler(self.send_to_vip_channel, pattern="^send_to_vip_channel$"))
+        self.app.add_handler(CallbackQueryHandler(self.send_to_free_channel, pattern="^send_to_free_channel$"))
+        self.app.add_handler(CallbackQueryHandler(self.handle_file_choice, pattern="^(attach_file|no_file)$"))
+        self.app.add_handler(CallbackQueryHandler(self.handle_download_restriction, pattern="^(disable_downloads|allow_downloads)$"))
+        self.app.add_handler(CallbackQueryHandler(self.handle_message_confirmation, pattern="^(confirm_send_message|edit_message)$"))
+        
         self.app.add_handler(MessageHandler(filters.FORWARDED, self.handle_forwarded_message))
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text_input))
+        self.app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.ALL, self.handle_file_input))
         
         job_queue = self.app.job_queue
         if job_queue:
